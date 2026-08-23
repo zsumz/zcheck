@@ -1,0 +1,18 @@
+[package]
+name = "zcheck-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "Adversarial repository fixtures for zcheck conformance."
+publish = false
+
+[dev-dependencies]
+zcheck-core.workspace = true
+
+[lints]
+workspace = true
