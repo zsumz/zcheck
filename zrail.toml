@@ -1,0 +1,485 @@
+schema = 1
+adapters = ["rust"]
+
+[repository]
+roots = ["crates"]
+exclude = []
+workspace_members = "exact"
+nested_git = "deny"
+submodules = "deny"
+symlinks = "inside"
+
+[[gate]]
+name = "check"
+kind = "local"
+path = "zcheck.toml"
+inputs = ["scripts/structure-check", "scripts/package-check", ".github/actions/setup-zcheck/action.yml", ".github/actions/setup-zcheck/install.py", ".github/actions/setup-zcheck/test_install.py", "rust-toolchain.toml", "rustfmt.toml", "clippy.toml", ".gitignore", "Cargo.toml", "crates/zcheck-cli/Cargo.toml", "crates/zcheck-core/Cargo.toml", "crates/zcheck-testkit/Cargo.toml", "docs/schema-1.md", "crates/zcheck-core/contracts/schema-1/manifest.toml", "crates/zcheck-core/contracts/schema-1/plan-linux.json", "crates/zcheck-core/contracts/schema-1/receipt.json"]
+reason = "The repository's canonical local qualification graph and substantive leaf programs."
+
+[[gate]]
+name = "ci"
+kind = "ci"
+path = ".github/workflows/ci.yml"
+inputs = [".github/actions/setup-rust/action.yml", ".github/actions/setup-zrail/action.yml"]
+requires = ["check"]
+reason = "Hosted qualification bootstraps zcheck and executes the canonical local graph."
+
+[[gate]]
+name = "security"
+kind = "ci"
+path = ".github/workflows/security.yml"
+inputs = [".github/actions/setup-rust/action.yml"]
+requires = ["check"]
+reason = "Online RustSec advisory checks complement the offline repository qualification graph."
+
+[[gate]]
+name = "architecture-review"
+kind = "ci"
+path = ".github/workflows/authority.yml"
+inputs = [".github/actions/setup-rust/action.yml", ".github/actions/setup-zrail/action.yml"]
+requires = ["check"]
+reason = "Protected-base analysis reviews proposed source as data without executing it."
+
+[[invariant]]
+id = "SCHEMA-01"
+title = "Schema one and process exits remain machine-compatible"
+status = "enforced"
+document = "docs/schema-1.md#compatibility-rule"
+evidence = [
+  "rust-test:crates/zcheck-core/src/compatibility_test.rs::manifest_and_linux_plan_match_the_schema_one_golden_contract",
+  "rust-test:crates/zcheck-core/src/compatibility_test.rs::receipt_round_trips_the_schema_one_golden_contract",
+  "rust-test:crates/zcheck-core/src/compatibility_test.rs::receipt_parser_rejects_unknown_versions_and_fields",
+  "rust-test:crates/zcheck-testkit/tests/public_api.rs::static_consumers_can_inspect_every_review_relevant_field",
+  "rust-test:crates/zcheck-testkit/tests/public_api.rs::static_consumers_can_resolve_every_supported_platform_without_execution",
+  "rust-test:crates/zcheck-cli/src/app/exit_test.rs::stable_exit_codes_have_the_documented_values",
+  "rust-test:crates/zcheck-cli/tests/exit_codes.rs::published_exit_classes_are_stable_end_to_end",
+  "rust-test:crates/zcheck-cli/tests/process_control.rs::ctrl_c_cancels_the_tree_and_every_unscheduled_task_with_exit_130",
+  "gate:check",
+  "gate:ci",
+]
+
+[[invariant]]
+id = "QUAL-01"
+title = "Repository qualification remains explicit and shell-string free"
+status = "enforced"
+document = "README.md#qualification"
+evidence = [
+  "rust-test:crates/zcheck-core/src/manifest_test.rs::rejects_unknown_fields_at_every_schema_level",
+  "rust-test:crates/zcheck-core/src/validate_test.rs::rejects_process_only_fields_on_aggregate_tasks",
+  "rust-test:crates/zcheck-core/src/validate_test.rs::rejects_unrepresentable_process_values_and_escaping_tool_paths",
+  "rust-test:crates/zcheck-testkit/tests/fixtures.rs::fixtures_use_argument_vectors_instead_of_shell_strings",
+  "gate:check",
+  "gate:ci",
+  "gate:security",
+  "gate:architecture-review",
+]
+
+[[invariant]]
+id = "PLAN-01"
+title = "Plans resolve shared dependencies once and retain honest platform skips"
+status = "enforced"
+document = "docs/design.md#schema-1"
+evidence = [
+  "rust-test:crates/zcheck-core/src/plan_test.rs::resolves_shared_dependencies_once_in_dependency_order",
+  "rust-test:crates/zcheck-core/src/plan_test.rs::retains_the_skipped_platform_branch_without_its_private_dependencies",
+  "rust-test:crates/zcheck-core/src/platform_test.rs::maps_only_the_three_supported_host_families",
+  "rust-test:crates/zcheck-testkit/tests/fixtures.rs::all_design_repositories_have_valid_complete_check_plans",
+  "gate:check",
+]
+
+[[invariant]]
+id = "RUN-01"
+title = "Qualification reports failures without hiding independent evidence"
+status = "enforced"
+document = "docs/design.md#execution-boundary"
+evidence = [
+  "rust-test:crates/zcheck-cli/src/app/execution/model_test.rs::serializes_the_complete_stable_status_vocabulary",
+  "rust-test:crates/zcheck-cli/tests/execution.rs::failure_blocks_descendants_but_not_independent_tasks",
+  "rust-test:crates/zcheck-cli/tests/execution.rs::pass_through_arguments_reach_one_executable_root_and_its_log",
+  "rust-test:crates/zcheck-cli/tests/execution_edge.rs::skipped_branches_do_not_require_their_unplanned_dependencies",
+  "rust-test:crates/zcheck-cli/tests/execution_edge.rs::runner_storage_failures_use_the_internal_error_exit",
+  "rust-test:crates/zcheck-cli/tests/execution_edge.rs::working_directory_symlinks_may_not_escape_the_repository",
+  "rust-test:crates/zcheck-cli/tests/execution_edge.rs::repository_executable_symlinks_may_not_escape_the_repository",
+  "rust-test:crates/zcheck-cli/tests/execution_edge.rs::multiple_roots_share_one_dependency_per_invocation",
+  "rust-test:crates/zcheck-cli/tests/execution_hardening.rs::long_task_names_use_bounded_unique_log_file_names",
+  "rust-test:crates/zcheck-cli/tests/execution_hardening.rs::manifest_symlink_may_not_escape_the_repository",
+  "rust-test:crates/zcheck-cli/tests/execution_hardening.rs::missing_working_directory_blocks_only_its_branch",
+  "rust-test:crates/zcheck-cli/tests/execution_hardening.rs::platform_reserved_task_names_are_not_raw_log_file_names",
+  "rust-test:crates/zcheck-cli/tests/execution_hardening.rs::run_directories_and_task_logs_are_private",
+  "gate:check",
+  "gate:ci",
+]
+
+[[invariant]]
+id = "PKG-01"
+title = "Publishable archives contain self-consistent source and tests"
+status = "enforced"
+document = "README.md#qualification"
+evidence = [
+  "rust-test:crates/zcheck-testkit/tests/fixtures.rs::package_gate_tests_self_contained_publishable_sources",
+  "gate:check",
+  "gate:ci",
+]
+
+[[invariant]]
+id = "EVID-01"
+title = "Receipts prove exact checkout preservation without exposing environment values"
+status = "enforced"
+document = "docs/design.md#repository-state"
+evidence = [
+  "rust-test:crates/zcheck-core/src/receipt_test.rs::stable_status_and_termination_values_are_lowercase",
+  "rust-test:crates/zcheck-cli/src/app/execution/repository_test.rs::dirty_submodule_content_changes_the_recursive_fingerprint",
+  "rust-test:crates/zcheck-cli/src/app/execution/repository_test.rs::untracked_file_contents_change_the_fingerprint",
+  "rust-test:crates/zcheck-cli/tests/execution_hardening.rs::relative_artifact_paths_may_not_follow_symlinks_outside_the_repository",
+  "rust-test:crates/zcheck-cli/tests/repository_evidence.rs::clean_rejects_initial_dirt_without_starting_tasks",
+  "rust-test:crates/zcheck-cli/tests/repository_evidence.rs::explicit_artifacts_are_persisted_without_failing_preservation",
+  "rust-test:crates/zcheck-cli/tests/repository_evidence.rs::preserve_accepts_an_exactly_unchanged_dirty_checkout",
+  "rust-test:crates/zcheck-cli/tests/repository_evidence.rs::preserve_detects_content_changes_hidden_by_the_same_status_code",
+  "gate:check",
+  "gate:ci",
+]
+
+[[invariant]]
+id = "PROC-01"
+title = "Task completion owns the complete process tree and its output"
+status = "enforced"
+document = "docs/design.md#execution-boundary"
+evidence = [
+  "rust-test:crates/zcheck-core/src/plan_test.rs::projects_default_and_task_timeout_precedence_only_onto_processes",
+  "rust-test:crates/zcheck-cli/tests/process_control.rs::large_stdout_and_stderr_stream_without_deadlock_or_memory_buffering",
+  "rust-test:crates/zcheck-cli/tests/process_control.rs::timeout_allows_graceful_process_group_exit_before_forcing",
+  "rust-test:crates/zcheck-cli/tests/process_control.rs::timeout_force_kills_the_complete_process_tree",
+  "rust-test:crates/zcheck-cli/tests/process_control.rs::ctrl_c_cancels_the_tree_and_every_unscheduled_task_with_exit_130",
+  "rust-test:crates/zcheck-cli/src/app/execution/process/child_test.rs::linux_process_states_distinguish_zombies_from_live_members",
+  "gate:check",
+  "gate:ci",
+]
+
+[[invariant]]
+id = "SCHED-01"
+title = "DAG scheduling is bounded, deterministic, and resource-safe"
+status = "enforced"
+document = "docs/design.md#execution-boundary"
+evidence = [
+  "rust-test:crates/zcheck-cli/tests/concurrency.rs::jobs_override_bounds_parallelism_and_receipts_stay_in_plan_order",
+  "rust-test:crates/zcheck-cli/tests/concurrency.rs::resources_are_exclusive_without_blocking_unrelated_work",
+  "rust-test:crates/zcheck-cli/tests/concurrency.rs::executable_descendants_wait_for_every_dependency",
+  "rust-test:crates/zcheck-cli/tests/concurrency.rs::fail_fast_stops_new_work_but_allows_running_tasks_to_finish",
+  "rust-test:crates/zcheck-cli/tests/concurrency.rs::human_progress_reports_starts_and_completions_without_stream_interleaving",
+  "rust-test:crates/zcheck-cli/tests/process_control.rs::ctrl_c_cancels_the_tree_and_every_unscheduled_task_with_exit_130",
+  "rust-test:crates/zcheck-cli/tests/execution.rs::failure_blocks_descendants_but_not_independent_tasks",
+  "gate:check",
+  "gate:ci",
+]
+
+[[invariant]]
+id = "CI-01"
+title = "GitHub reporting preserves qualification status and bounded evidence"
+status = "enforced"
+document = "docs/design.md#ci-reporting-and-evidence"
+evidence = [
+  "rust-test:crates/zcheck-cli/src/app/execution/github_test.rs::workflow_command_fields_follow_toolkit_escaping",
+  "rust-test:crates/zcheck-cli/src/app/execution/github_test.rs::annotations_are_utf8_safe_and_strictly_bounded",
+  "rust-test:crates/zcheck-cli/src/app/execution/github_test.rs::grouped_task_data_cannot_start_a_workflow_command",
+  "rust-test:crates/zcheck-cli/src/app/execution/github_test.rs::failure_context_reads_only_a_bounded_complete_line_tail",
+  "rust-test:crates/zcheck-cli/tests/github_reporter.rs::github_groups_are_serial_and_failure_keeps_its_exit_and_artifacts",
+  "rust-test:crates/zcheck-cli/tests/github_reporter.rs::github_annotations_have_a_stable_run_wide_limit",
+  "gate:check",
+  "gate:ci",
+]
+
+[dependencies]
+mode = "locked"
+unassigned_packages = "deny"
+cycles = "deny"
+
+[[dependencies.crate_root]]
+package = "command-group"
+root = "command_group"
+reason = "The task executor uses reviewed cross-platform process-group and Job Object containment."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "5.0.1"
+
+[[dependencies.crate_root]]
+package = "nix"
+root = "nix"
+reason = "Unix task-tree liveness uses the reviewed safe process-group signal interface."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "0.27.1"
+
+[[dependencies.crate_root]]
+package = "serde"
+root = "serde"
+reason = "The published serde library exposes the serde crate root."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "1.0.229"
+
+[[dependencies.crate_root]]
+package = "serde_json"
+root = "serde_json"
+reason = "The published serde_json library exposes the serde_json crate root."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "1.0.151"
+
+[[dependencies.crate_root]]
+package = "sha2"
+root = "sha2"
+reason = "The published sha2 library exposes the SHA-256 implementation used for evidence digests."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "0.10.9"
+
+[[dependencies.crate_root]]
+package = "signal-hook"
+root = "signal_hook"
+reason = "The executor observes Ctrl-C and Unix task fixtures observe graceful termination without unsafe signal handlers."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "0.4.4"
+
+[[dependencies.crate_root]]
+package = "toml"
+root = "toml"
+reason = "The published toml library exposes the toml crate root."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "0.9.12"
+
+[[dependencies.crate_root]]
+package = "win32job"
+root = "win32job"
+reason = "Windows task-tree liveness uses a reviewed safe Job Object observer."
+[dependencies.crate_root.source]
+kind = "registry"
+requirement = "2.0.3"
+
+[source.rust]
+module_docs = "required"
+facades = "declarative"
+entrypoints = "declarative"
+tests = "sibling"
+
+[source.rust.macros]
+mode = "deny-unreviewed"
+
+[[source.rust.macros.allow]]
+name = "Clone"
+reason = "Data models and error values use Rust's built-in Clone derive."
+
+[[source.rust.macros.allow]]
+name = "Copy"
+reason = "Small platform, status, and policy enums use Rust's built-in Copy derive."
+
+[[source.rust.macros.allow]]
+name = "Debug"
+reason = "Models and internal state use Rust's built-in Debug derive for diagnostics."
+
+[[source.rust.macros.allow]]
+name = "Default"
+reason = "Configuration values use Rust's built-in Default derive where schema defaults are explicit."
+
+[[source.rust.macros.allow]]
+name = "Eq"
+reason = "Deterministic value models use Rust's built-in Eq derive."
+
+[[source.rust.macros.allow]]
+name = "Hash"
+reason = "Validated task names use Rust's built-in Hash derive for identity collections."
+
+[[source.rust.macros.allow]]
+name = "Ord"
+reason = "Task and platform values use Rust's built-in Ord derive for deterministic ordering."
+
+[[source.rust.macros.allow]]
+name = "PartialEq"
+reason = "Models and tests use Rust's built-in PartialEq derive for exact comparisons."
+
+[[source.rust.macros.allow]]
+name = "PartialOrd"
+reason = "Task and platform values use Rust's built-in PartialOrd derive for ordering."
+
+[[source.rust.macros.allow]]
+name = "assert"
+reason = "Tests use Rust's standard assertion expansion."
+
+[[source.rust.macros.allow]]
+name = "assert_eq"
+reason = "Tests use Rust's standard equality assertion expansion."
+
+[[source.rust.macros.allow]]
+name = "eprintln"
+reason = "The CLI writes bounded user-facing failures to standard error."
+
+[[source.rust.macros.allow]]
+name = "format"
+reason = "Diagnostics and deterministic rendering use Rust's standard formatting expansion."
+
+[[source.rust.macros.allow]]
+name = "matches"
+reason = "The CLI grammar and validated bytes use Rust's standard pattern predicate."
+
+[[source.rust.macros.allow]]
+name = "println"
+reason = "The CLI writes completed human and JSON reports to standard output."
+
+[[source.rust.macros.allow]]
+name = "serde"
+reason = "Serde helper attributes configure reviewed serialization derives."
+[source.rust.macros.allow.source]
+kind = "registry"
+requirement = "1.0.229"
+
+[[source.rust.macros.allow]]
+name = "serde::Deserialize"
+reason = "Strict manifest wire types use the reviewed serde Deserialize derive."
+[source.rust.macros.allow.source]
+kind = "registry"
+requirement = "1.0.229"
+
+[[source.rust.macros.allow]]
+name = "serde::Serialize"
+reason = "Versioned plan and inspection contracts use the reviewed serde Serialize derive."
+[source.rust.macros.allow.source]
+kind = "registry"
+requirement = "1.0.229"
+
+[[source.rust.macros.allow]]
+name = "vec"
+reason = "Plans and tests use Rust's standard vector construction expansion."
+
+[source.rust.hygiene]
+unsafe = "deny"
+lint_suppressions = "deny"
+deny_methods = ["unwrap", "expect"]
+deny_macros = ["panic", "todo", "unimplemented", "unreachable", "dbg"]
+
+[source.rust.size.facade]
+target = 80
+hard = 120
+
+[source.rust.size.implementation]
+target = 240
+hard = 300
+
+[source.rust.size.test]
+target = 300
+hard = 300
+
+[source.rust.size.auxiliary]
+target = 300
+hard = 300
+
+[[layer]]
+name = "model"
+packages = ["zcheck-core"]
+may_depend_on = []
+reason = "Public manifest and plan contracts remain independent of execution and presentation."
+
+[layer.dependencies]
+external = "locked"
+
+[[layer]]
+name = "application"
+packages = ["zcheck"]
+may_depend_on = ["model", "verification"]
+reason = "The CLI uses the public model at runtime and the unpublished testkit only in integration tests."
+
+[layer.dependencies]
+external = "locked"
+
+[[layer]]
+name = "verification"
+packages = ["zcheck-testkit"]
+may_depend_on = ["model"]
+reason = "Cross-repository fixtures judge the model without entering the product graph."
+
+[layer.dependencies]
+external = "none"
+
+[[dependency]]
+name = "core-remains-execution-free"
+from = "zcheck-core"
+deny = ["zcheck", "zcheck-testkit"]
+reason = "The public model must not depend on the CLI, scheduler, or adversarial fixture package."
+
+[[scope]]
+name = "core-execution-boundary"
+include = ["crates/zcheck-core/src/**"]
+exclude = ["crates/zcheck-core/src/**/*_test.rs"]
+reason = "Manifest parsing and planning do not discover repositories, execute processes, or inspect hosts."
+
+[scope.symbols]
+deny = ["std::env", "std::fs", "std::net", "std::process"]
+
+[[owner]]
+name = "design-fixtures"
+kind = "directory"
+match = "**/fixtures"
+allow = ["crates/zcheck-testkit/tests/fixtures"]
+reason = "Cross-repository manifest fixtures have one visible unpublished owner."
+
+[[owner]]
+name = "filesystem-capability"
+kind = "capability"
+within = ["crates/**"]
+match = "std::fs"
+allow = [
+  "crates/zcheck-cli/src/app/discovery.rs",
+  "crates/zcheck-cli/src/app/execution/artifacts.rs",
+  "crates/zcheck-cli/src/app/execution/evidence.rs",
+  "crates/zcheck-cli/src/app/execution/github.rs",
+  "crates/zcheck-cli/src/app/execution/github_test.rs",
+  "crates/zcheck-cli/src/app/execution/logs.rs",
+  "crates/zcheck-cli/src/app/execution/logs/location.rs",
+  "crates/zcheck-cli/src/app/execution/preflight.rs",
+  "crates/zcheck-cli/src/app/execution/process/child.rs",
+  "crates/zcheck-cli/src/app/execution/receipt_io.rs",
+  "crates/zcheck-cli/src/app/execution/repository.rs",
+  "crates/zcheck-cli/src/app/execution/repository/support.rs",
+  "crates/zcheck-cli/src/app/execution/repository_test.rs",
+  "crates/zcheck-cli/tests/concurrency.rs",
+  "crates/zcheck-cli/tests/concurrency/fixture.rs",
+  "crates/zcheck-cli/tests/github_reporter.rs",
+  "crates/zcheck-cli/tests/process_control.rs",
+  "crates/zcheck-cli/tests/process_control/fixture.rs",
+  "crates/zcheck-cli/tests/repository_evidence.rs",
+  "crates/zcheck-testkit/src/repository.rs",
+  "crates/zcheck-testkit/tests/fixtures.rs",
+]
+reason = "Repository discovery, evidence capture, artifact persistence, Linux process-tree liveness, and isolated fixtures own filesystem access."
+
+[[owner]]
+name = "process-capability"
+kind = "capability"
+within = ["crates/**"]
+match = "std::process::Command"
+allow = [
+  "crates/zcheck-cli/src/app/execution/process/child.rs",
+  "crates/zcheck-cli/src/app/execution/repository/support.rs",
+  "crates/zcheck-cli/src/app/execution/repository_test.rs",
+  "crates/zcheck-cli/src/app/internal_host.rs",
+  "crates/zcheck-cli/tests/cli.rs",
+  "crates/zcheck-cli/tests/process_control/fixture.rs",
+  "crates/zcheck-testkit/src/repository.rs",
+]
+reason = "Task execution and Git evidence capture own child processes; tests own isolated proof processes."
+
+[[owner]]
+name = "process-construction"
+kind = "call"
+within = ["crates/**"]
+match = "std::process::Command::new"
+allow = [
+  "crates/zcheck-cli/src/app/execution/process/child.rs",
+  "crates/zcheck-cli/src/app/execution/repository/support.rs",
+  "crates/zcheck-cli/src/app/execution/repository_test.rs",
+  "crates/zcheck-cli/src/app/internal_host.rs",
+  "crates/zcheck-cli/tests/cli.rs",
+  "crates/zcheck-cli/tests/process_control/fixture.rs",
+  "crates/zcheck-testkit/src/repository.rs",
+]
+reason = "Process construction is confined to task execution, Git evidence capture, and isolated test boundaries."
