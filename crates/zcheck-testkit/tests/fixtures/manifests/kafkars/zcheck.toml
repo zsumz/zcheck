@@ -1,0 +1,88 @@
+schema = 1
+default = "check"
+
+[execution]
+jobs = 1
+default_timeout = "20m"
+repository_state = "preserve"
+
+[tasks.provenance]
+description = "Validate reviewed sibling dependency provenance."
+run = ["scripts/check-dependency-provenance"]
+tools = ["git", "cargo"]
+inputs = ["dependencies/sibling-revisions.env"]
+
+[tasks.provenance-contracts]
+description = "Test dependency provenance behavior."
+needs = ["provenance"]
+run = ["scripts/test-dependency-provenance"]
+
+[tasks.bootstrap-contracts]
+description = "Test reviewed sibling bootstrapping."
+needs = ["provenance"]
+run = ["scripts/test-bootstrap-siblings"]
+
+[tasks.guardrails]
+description = "Run the architecture guardrail contract suite."
+needs = ["provenance"]
+run = ["cargo", "test", "--locked", "-p", "kafka-client-guardrails", "--all-features"]
+resources = ["cargo-target"]
+
+[tasks.git-diff]
+description = "Reject whitespace errors in repository changes."
+run = ["git", "diff", "--check"]
+
+[tasks.architecture]
+description = "Validate dependency and architecture contracts."
+needs = ["provenance-contracts", "bootstrap-contracts", "guardrails", "git-diff"]
+
+[tasks.format]
+description = "Validate Rust formatting."
+needs = ["provenance"]
+run = ["cargo", "fmt", "--all", "--", "--check"]
+resources = ["cargo-target"]
+
+[tasks.clippy]
+description = "Run Clippy with warnings denied."
+needs = ["provenance"]
+run = ["cargo", "clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
+resources = ["cargo-target"]
+
+[tasks.docs]
+description = "Build published documentation with warnings denied."
+needs = ["provenance"]
+run = ["cargo", "doc", "--locked", "--workspace", "--all-features", "--no-deps"]
+env = { RUSTDOCFLAGS = "-D warnings" }
+resources = ["cargo-target"]
+
+[tasks.rust-lint]
+description = "Validate formatting, lints, and documentation."
+needs = ["format", "clippy", "docs"]
+
+[tasks.test]
+description = "Run the complete Rust workspace test suite."
+needs = ["provenance"]
+run = ["cargo", "test", "--locked", "--workspace", "--all-features"]
+resources = ["cargo-target"]
+
+[tasks.rust-test]
+description = "Validate runtime and behavioral contracts."
+needs = ["test"]
+
+[tasks.foreign-contracts]
+description = "Compile and exercise the C, C++, and Java API contracts."
+run = ["scripts/check-foreign-contracts"]
+tools = ["cc", "c++", "javac", "java"]
+
+[tasks.package-contracts]
+description = "Rehearse package archives against reviewed sibling sources."
+needs = ["provenance"]
+run = ["scripts/check-rust-package"]
+
+[tasks.package]
+description = "Validate publishable package archives."
+needs = ["package-contracts"]
+
+[tasks.check]
+description = "Run complete local project qualification."
+needs = ["architecture", "rust-lint", "rust-test", "foreign-contracts", "package"]

@@ -1,0 +1,64 @@
+schema = 1
+default = "check"
+
+[execution]
+jobs = 1
+default_timeout = "20m"
+repository_state = "preserve"
+
+[tasks.structure]
+description = "Run bootstrap source-shape checks."
+run = ["scripts/structure-check"]
+tools = ["python3"]
+
+[tasks.architecture]
+description = "Enforce the reviewed zrail architecture contract."
+run = ["zrail", "check"]
+tools = ["zrail"]
+inputs = ["zrail.toml", "zrail.lock"]
+
+[tasks.format]
+description = "Validate Rust formatting."
+run = ["cargo", "fmt", "--all", "--", "--check"]
+resources = ["cargo-target"]
+
+[tasks.clippy]
+description = "Run Clippy with warnings denied."
+run = ["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--locked", "--offline", "--", "-D", "warnings"]
+resources = ["cargo-target"]
+
+[tasks.docs]
+description = "Build documentation with warnings denied."
+run = ["cargo", "doc", "--workspace", "--all-features", "--no-deps", "--locked", "--offline"]
+env = { RUSTDOCFLAGS = "-D warnings" }
+resources = ["cargo-target"]
+
+[tasks.rust-lint]
+description = "Validate formatting, lints, and documentation."
+needs = ["format", "clippy", "docs"]
+
+[tasks.test]
+description = "Run the complete workspace tests."
+run = ["cargo", "test", "--workspace", "--all-features", "--locked", "--offline"]
+resources = ["cargo-target"]
+
+[tasks.rust-test]
+description = "Validate runtime and behavioral contracts."
+needs = ["test"]
+
+[tasks.package-contracts]
+description = "Verify package archives and extracted-source compilation."
+run = ["scripts/package-check"]
+resources = ["cargo-target"]
+
+[tasks.package]
+description = "Validate publishable package archives."
+needs = ["package-contracts"]
+
+[tasks.git-diff]
+description = "Reject whitespace errors in repository changes."
+run = ["git", "diff", "--check"]
+
+[tasks.check]
+description = "Run complete local project qualification."
+needs = ["structure", "architecture", "rust-lint", "rust-test", "package", "git-diff"]

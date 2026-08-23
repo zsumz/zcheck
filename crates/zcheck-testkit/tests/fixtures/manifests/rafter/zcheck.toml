@@ -1,0 +1,73 @@
+schema = 1
+default = "check"
+
+[execution]
+jobs = 1
+default_timeout = "90m"
+repository_state = "preserve"
+
+[tasks.format]
+description = "Validate workspace Rust formatting."
+run = ["cargo", "fmt", "--all", "--", "--check"]
+resources = ["cargo-target"]
+
+[tasks.clippy]
+description = "Run workspace Clippy with warnings denied."
+run = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+resources = ["cargo-target"]
+
+[tasks.docs]
+description = "Build the exact published documentation set."
+run = ["scripts/rustdoc-check"]
+resources = ["cargo-target"]
+
+[tasks.completion]
+description = "Validate work-completion proof references."
+run = ["scripts/work-completion-check"]
+
+[tasks.lint]
+description = "Run the complete PR lint contract."
+needs = ["format", "clippy", "docs", "completion"]
+
+[tasks.test]
+description = "Run the complete Rust workspace test suite with diagnostics."
+run = ["scripts/ci-run-diagnosed", "workspace-tests", "target/rafter-invariants/ci-diagnostics/workspace-tests.log", "cargo", "test", "--workspace"]
+resources = ["cargo-target"]
+
+[tasks.reference-source]
+description = "Validate reference-consumer source boundaries."
+run = ["scripts/reference-source-check"]
+
+[tasks.reference-package]
+description = "Validate reference-consumer package boundaries and process suites."
+run = ["scripts/reference-package-check"]
+resources = ["cargo-target"]
+
+[tasks.reference]
+description = "Run the complete reference-consumer contract."
+needs = ["reference-source", "reference-package"]
+
+[tasks.invariants-pr]
+description = "Produce the source-bound PR invariant evidence aggregate."
+run = ["cargo", "run", "--locked", "-p", "rafter-invariants", "--", "run", "--profile", "pr"]
+resources = ["cargo-target", "invariant-evidence"]
+
+[tasks.maelstrom]
+description = "Produce the PR Maelstrom evidence layer."
+run = ["cargo", "run", "--locked", "-p", "rafter-invariants", "--", "run", "--profile", "pr", "--layer", "maelstrom"]
+tools = ["cargo", "maelstrom"]
+resources = ["cargo-target", "invariant-evidence"]
+
+[tasks.architecture]
+description = "Enforce reviewed zrail architecture policy."
+run = ["zrail", "check"]
+tools = ["zrail"]
+inputs = ["zrail.toml", "zrail.lock"]
+
+[tasks.pr]
+description = "Run pull-request qualification."
+needs = ["lint", "test", "reference", "invariants-pr", "architecture"]
+
+[tasks.check]
+description = "Run complete local project qualification."
+needs = ["pr"]

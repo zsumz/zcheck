@@ -1,0 +1,76 @@
+schema = 1
+default = "check"
+
+[execution]
+jobs = 1
+default_timeout = "90m"
+repository_state = "preserve"
+
+[tasks.bootstrap-toolchain]
+description = "Synchronize Java with the source bootstrap."
+run = ["scripts/bootstrap-zolt-jvm", "--no-progress", "toolchain", "sync"]
+tools = ["java"]
+resources = ["zolt-cache"]
+
+[tasks.bootstrap]
+description = "Build the current Zolt CLI from stage zero."
+needs = ["bootstrap-toolchain"]
+run = ["scripts/bootstrap-zolt-jvm", "--no-progress", "package", "--workspace", "--member", "apps/zolt", "--cache-root", ".zolt/cache"]
+resources = ["zolt-cache"]
+
+[tasks.managed-toolchain]
+description = "Synchronize and validate the Zolt-managed Java toolchain."
+needs = ["bootstrap"]
+run = ["scripts/run-zolt-built", "toolchain", "sync"]
+resources = ["zolt-cache"]
+
+[tasks.foundation-test]
+description = "Test the foundation workspace group."
+needs = ["managed-toolchain"]
+run = ["scripts/run-zolt-built", "test", "--workspace", "--members", "modules/zolt-model,modules/zolt-framework-api,modules/zolt-toml,modules/zolt-repository,modules/zolt-resolve,modules/zolt-update,modules/zolt-test-model,modules/zolt-junit-client", "--no-progress", "--cache-root", ".zolt/cache"]
+resources = ["zolt-cache"]
+
+[tasks.runtime-test]
+description = "Test the build-runtime workspace group."
+needs = ["managed-toolchain"]
+run = ["scripts/run-zolt-built", "test", "--workspace", "--members", "modules/zolt-build,modules/zolt-test-runtime,modules/zolt-native-image,modules/zolt-workspace", "--no-progress", "--cache-root", ".zolt/cache"]
+resources = ["zolt-cache"]
+
+[tasks.quality-test]
+description = "Test the release-quality workspace group."
+needs = ["managed-toolchain"]
+run = ["scripts/run-zolt-built", "test", "--workspace", "--members", "modules/zolt-release,modules/zolt-publish,modules/zolt-policy,modules/zolt-quality,modules/zolt-tree,modules/zolt-plan", "--no-progress", "--cache-root", ".zolt/cache"]
+resources = ["zolt-cache"]
+
+[tasks.cli-test]
+description = "Test the CLI and application workspace group."
+needs = ["managed-toolchain"]
+run = ["scripts/run-zolt-built", "test", "--workspace", "--members", "modules/zolt-explain,modules/zolt-config,modules/zolt-selfhost,modules/zolt-init,apps/zolt-javac-worker,apps/zolt-junit-worker,apps/zolt", "--no-progress", "--cache-root", ".zolt/cache"]
+resources = ["zolt-cache"]
+
+[tasks.test]
+description = "Run all grouped Zolt repository tests."
+needs = ["foundation-test", "runtime-test", "quality-test", "cli-test"]
+
+[tasks.coverage]
+description = "Enforce coverage floors across the workspace."
+needs = ["managed-toolchain"]
+run = ["scripts/run-zolt-built", "coverage", "--workspace", "--all", "--no-progress", "--cache-root", ".zolt/cache"]
+resources = ["zolt-cache"]
+
+[tasks.smoke]
+description = "Run packaged core smoke workflows."
+needs = ["managed-toolchain"]
+run = ["scripts/smoke-smoque", "core"]
+tools = ["node", "npx"]
+resources = ["zolt-cache"]
+
+[tasks.release-contracts]
+description = "Validate install and distribution behavior."
+needs = ["managed-toolchain"]
+run = ["scripts/zap-distribution-test"]
+resources = ["zolt-cache"]
+
+[tasks.check]
+description = "Run complete local project qualification."
+needs = ["test", "coverage", "smoke", "release-contracts"]

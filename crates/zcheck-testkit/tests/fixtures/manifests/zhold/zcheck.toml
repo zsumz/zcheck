@@ -1,0 +1,84 @@
+schema = 1
+default = "check"
+
+[execution]
+jobs = 1
+default_timeout = "20m"
+repository_state = "preserve"
+
+[tasks.guardrails]
+description = "Enforce repository architecture and hygiene."
+run = ["python3", "scripts/guardrails.py"]
+tools = ["python3"]
+
+[tasks.format]
+description = "Validate Rust formatting."
+run = ["cargo", "fmt", "--all", "--", "--check"]
+resources = ["cargo-target"]
+
+[tasks.clippy]
+description = "Run Clippy with warnings denied."
+run = ["cargo", "clippy", "--locked", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
+resources = ["cargo-target"]
+
+[tasks.docs]
+description = "Build documentation with warnings denied."
+run = ["cargo", "doc", "--locked", "--workspace", "--all-features", "--no-deps"]
+env = { RUSTDOCFLAGS = "-D warnings" }
+resources = ["cargo-target"]
+
+[tasks.rust-lint]
+description = "Validate formatting, lints, and documentation."
+needs = ["format", "clippy", "docs"]
+
+[tasks.test]
+description = "Run the complete workspace test suite."
+run = ["cargo", "test", "--locked", "--workspace", "--all-features"]
+resources = ["cargo-target"]
+
+[tasks.default-surface]
+description = "Verify the default CLI excludes the experimental control plane."
+run = ["cargo", "test", "--locked", "-p", "zhold", "--no-default-features", "default_help_excludes_experimental_control_plane"]
+resources = ["cargo-target"]
+
+[tasks.rust-test]
+description = "Validate runtime and behavioral contracts."
+needs = ["test", "default-surface"]
+
+[tasks.git-diff]
+description = "Reject whitespace errors in repository changes."
+run = ["git", "diff", "--check"]
+
+[tasks.check]
+description = "Run complete local project qualification."
+needs = ["guardrails", "rust-lint", "rust-test", "git-diff"]
+
+[tasks.smoke-unix]
+description = "Run installed CLI smoke tests on Unix."
+platforms = ["linux", "macos"]
+run = ["scripts/smoke"]
+tools = ["node", "npx", "cargo"]
+
+[tasks.smoke-windows]
+description = "Run installed CLI smoke tests on Windows."
+platforms = ["windows"]
+run = ["pwsh", "-File", "scripts/smoke.ps1"]
+tools = ["pwsh", "node", "npx", "cargo"]
+
+[tasks.smoke]
+description = "Run the applicable installed CLI smoke suite."
+needs = ["smoke-unix", "smoke-windows"]
+
+[tasks.package-contracts]
+description = "Verify package archives and a clean CLI installation."
+run = ["scripts/package-smoke"]
+tools = ["cargo", "tar", "python3"]
+
+[tasks.package]
+description = "Validate publishable package archives."
+needs = ["package-contracts"]
+
+[tasks.release-check]
+description = "Run the substantive release check; pass the version after --."
+run = ["scripts/release-check"]
+tools = ["cargo", "node", "npx", "python3", "tar"]
