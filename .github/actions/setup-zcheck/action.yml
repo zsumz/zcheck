@@ -1,0 +1,27 @@
+name: setup zcheck
+description: Install and verify one exact zcheck release archive.
+inputs:
+  version:
+    description: Exact zcheck version without a leading v.
+    required: true
+  sha256:
+    description: Reviewed SHA-256 of the release archive for this runner.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install exact verified zcheck release on Unix
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        ZCHECK_SETUP_VERSION: ${{ inputs.version }}
+        ZCHECK_SETUP_SHA256: ${{ inputs.sha256 }}
+      run: python3 "${{ github.action_path }}/install.py"
+
+    - name: Install exact verified zcheck release on Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      env:
+        ZCHECK_SETUP_VERSION: ${{ inputs.version }}
+        ZCHECK_SETUP_SHA256: ${{ inputs.sha256 }}
+      run: python "${{ github.action_path }}/install.py"

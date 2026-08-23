@@ -1,0 +1,19 @@
+name: setup rust
+description: Install the repository-pinned Rust toolchain.
+inputs:
+  toolchain:
+    description: Rust toolchain to install.
+    required: false
+    default: "1.97.1"
+runs:
+  using: composite
+  steps:
+    - name: Install Rust toolchain
+      shell: bash
+      run: >-
+        rustup toolchain install "${{ inputs.toolchain }}"
+        --profile minimal
+        --component clippy,rustfmt
+    - name: Select Rust toolchain
+      shell: bash
+      run: rustup override set "${{ inputs.toolchain }}"
