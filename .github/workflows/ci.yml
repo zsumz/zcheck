@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  canonical:
+    name: canonical
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Reject repository-local Cargo configuration
+        run: |
+          for cargo_config in .cargo/config .cargo/config.toml; do
+            if [[ -e "$cargo_config" || -L "$cargo_config" ]]; then
+              echo "repository-local Cargo configuration is not permitted: $cargo_config" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Set up reviewed zrail
+        uses: ./.github/actions/setup-zrail
+
+      - name: Run canonical zcheck qualification
+        env:
+          ZCHECK_CACHE_DIR: ${{ runner.temp }}/zcheck
+          ZCHECK_EVIDENCE_DIR: ${{ runner.temp }}/zcheck-evidence
+        run: >-
+          cargo run --locked --offline -p zcheck -- run check
+          --format github
+          --logs-dir "$ZCHECK_EVIDENCE_DIR/logs"
+          --receipt "$ZCHECK_EVIDENCE_DIR/receipt.json"
+
+      - name: Upload canonical zcheck evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zcheck-canonical-${{ runner.os }}
+          path: ${{ runner.temp }}/zcheck-evidence
+          if-no-files-found: error
+
+  portable:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Reject repository-local Cargo configuration
+        run: |
+          for cargo_config in .cargo/config .cargo/config.toml; do
+            if [[ -e "$cargo_config" || -L "$cargo_config" ]]; then
+              echo "repository-local Cargo configuration is not permitted: $cargo_config" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Run portable Rust and setup-action qualification
+        env:
+          ZCHECK_CACHE_DIR: ${{ runner.temp }}/zcheck
+          ZCHECK_EVIDENCE_DIR: ${{ runner.temp }}/zcheck-evidence
+        run: >-
+          cargo run --locked --offline -p zcheck -- run
+          rust-test setup-action-contracts
+          --format github
+          --logs-dir "$ZCHECK_EVIDENCE_DIR/logs"
+          --receipt "$ZCHECK_EVIDENCE_DIR/receipt.json"
+
+      - name: Upload portable zcheck evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zcheck-portable-${{ matrix.os }}
+          path: ${{ runner.temp }}/zcheck-evidence
+          if-no-files-found: error
+
+  compatibility:
+    name: compatibility (Rust 1.96.1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Reject repository-local Cargo configuration
+        run: |
+          for cargo_config in .cargo/config .cargo/config.toml; do
+            if [[ -e "$cargo_config" || -L "$cargo_config" ]]; then
+              echo "repository-local Cargo configuration is not permitted: $cargo_config" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up minimum Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          toolchain: "1.96.1"
+
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Compile every supported target and feature
+        run: cargo check --workspace --all-targets --all-features --locked --offline
+
+      - name: Run schema compatibility contracts
+        run: cargo test --locked --offline -p zcheck-core
