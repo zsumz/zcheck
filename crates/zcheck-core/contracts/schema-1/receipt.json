@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "run_id": "01K0SCHEMA1CONTRACT0000000",
+  "runner": {
+    "name": "zcheck",
+    "version": "0.0.1"
+  },
+  "manifest": {
+    "path": "zcheck.toml",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "repository": {
+    "state_mode": "preserve",
+    "before": {
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "head": "3333333333333333333333333333333333333333",
+      "staged_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "unstaged_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "untracked_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "submodules_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "clean": true
+    },
+    "after": {
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "head": "3333333333333333333333333333333333333333",
+      "staged_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "unstaged_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "untracked_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "submodules_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "clean": true
+    },
+    "preserved": true
+  },
+  "selection": [
+    "check"
+  ],
+  "host": {
+    "os": "linux",
+    "arch": "x86_64"
+  },
+  "status": "cancelled",
+  "logs_dir": "/cache/zcheck/01K0SCHEMA1CONTRACT0000000",
+  "receipt": "/cache/zcheck/01K0SCHEMA1CONTRACT0000000/receipt.json",
+  "tasks": [
+    {
+      "name": "passed",
+      "status": "passed",
+      "command": [
+        "cargo",
+        "check"
+      ],
+      "cwd": ".",
+      "duration_ms": 12,
+      "exit_code": 0,
+      "log": "/cache/zcheck/01K0SCHEMA1CONTRACT0000000/passed.log",
+      "reason": null,
+      "environment": [
+        "RUSTFLAGS"
+      ],
+      "termination": null
+    },
+    {
+      "name": "failed",
+      "status": "failed",
+      "command": [
+        "cargo",
+        "test"
+      ],
+      "cwd": ".",
+      "duration_ms": 34,
+      "exit_code": null,
+      "log": "/cache/zcheck/01K0SCHEMA1CONTRACT0000000/failed.log",
+      "reason": "timed out after 30s",
+      "environment": [],
+      "termination": {
+        "reason": "timeout",
+        "forced": true
+      }
+    },
+    {
+      "name": "blocked",
+      "status": "blocked",
+      "command": null,
+      "cwd": ".",
+      "duration_ms": 0,
+      "exit_code": null,
+      "log": null,
+      "reason": "dependency `failed` failed",
+      "environment": [],
+      "termination": null
+    },
+    {
+      "name": "skipped",
+      "status": "skipped",
+      "command": null,
+      "cwd": ".",
+      "duration_ms": 0,
+      "exit_code": null,
+      "log": null,
+      "reason": "platform does not apply",
+      "environment": [],
+      "termination": null
+    },
+    {
+      "name": "cancelled",
+      "status": "cancelled",
+      "command": [
+        "cargo",
+        "doc"
+      ],
+      "cwd": ".",
+      "duration_ms": 56,
+      "exit_code": null,
+      "log": "/cache/zcheck/01K0SCHEMA1CONTRACT0000000/cancelled.log",
+      "reason": "interrupted by user",
+      "environment": [],
+      "termination": {
+        "reason": "interrupted",
+        "forced": false
+      }
+    }
+  ]
+}

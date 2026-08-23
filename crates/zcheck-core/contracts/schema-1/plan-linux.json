@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "selection": [
+    "check"
+  ],
+  "platform": "linux",
+  "jobs": 2,
+  "tasks": [
+    {
+      "name": "build",
+      "description": "Build the reviewed workspace.",
+      "kind": "executable",
+      "applicability": "applicable",
+      "command": [
+        "cargo",
+        "check",
+        "--locked"
+      ],
+      "needs": [],
+      "cwd": "crates/example",
+      "environment": [
+        "RUSTFLAGS",
+        "TOKEN"
+      ],
+      "tools": [
+        "cargo",
+        "git"
+      ],
+      "resources": [
+        "cargo-target"
+      ],
+      "inputs": [
+        "Cargo.toml",
+        "src/lib.rs"
+      ],
+      "timeout": "20m"
+    },
+    {
+      "name": "windows-smoke",
+      "description": "Run the Windows smoke contract.",
+      "kind": "executable",
+      "applicability": "skipped",
+      "command": [
+        "pwsh",
+        "-File",
+        "scripts/smoke.ps1"
+      ],
+      "needs": [],
+      "cwd": ".",
+      "environment": [],
+      "tools": [
+        "pwsh"
+      ],
+      "resources": [],
+      "inputs": [
+        "scripts/smoke.ps1"
+      ],
+      "timeout": "30s"
+    },
+    {
+      "name": "check",
+      "description": "Qualify every applicable branch.",
+      "kind": "aggregate",
+      "applicability": "applicable",
+      "command": null,
+      "needs": [
+        "build",
+        "windows-smoke"
+      ],
+      "cwd": ".",
+      "environment": [],
+      "tools": [],
+      "resources": [],
+      "inputs": [
+        "docs/schema-1.md"
+      ],
+      "timeout": null
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+schema = 1
+default = "check"
+
+[execution]
+jobs = 2
+default_timeout = "20m"
+repository_state = "preserve"
+
+[tasks.build]
+description = "Build the reviewed workspace."
+run = ["cargo", "check", "--locked"]
+cwd = "crates/example"
+env = { RUSTFLAGS = "-D warnings", TOKEN = "not-recorded" }
+tools = ["cargo", "git"]
+platforms = ["linux", "macos"]
+resources = ["cargo-target"]
+inputs = ["Cargo.toml", "src/lib.rs"]
+
+[tasks.windows-smoke]
+description = "Run the Windows smoke contract."
+run = ["pwsh", "-File", "scripts/smoke.ps1"]
+tools = ["pwsh"]
+timeout = "30s"
+platforms = ["windows"]
+inputs = ["scripts/smoke.ps1"]
+
+[tasks.check]
+description = "Qualify every applicable branch."
+needs = ["build", "windows-smoke"]
+inputs = ["docs/schema-1.md"]
