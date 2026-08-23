@@ -1,0 +1,7 @@
+/target/
+/.zrail/cache/
+/.zrail-lock-*.tmp
+*.swp
+*.pyc
+__pycache__/
+.DS_Store
