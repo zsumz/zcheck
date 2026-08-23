@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo_root"
+
+version=$(awk -F'"' '/^version = "/ { print $2; exit }' Cargo.toml)
+package_target=${CARGO_TARGET_DIR:-"$repo_root/target"}
+if [[ "$package_target" != /* ]]; then
+  package_target="$repo_root/$package_target"
+fi
+export CARGO_TARGET_DIR="$package_target"
+package_tmp=$(mktemp -d "${TMPDIR:-/tmp}/zcheck-package-check.XXXXXX")
+trap 'rm -rf -- "$package_tmp"' EXIT
+
+for package in zcheck-core zcheck; do
+  package_args=(--package "$package" --allow-dirty --locked --offline)
+  if [[ "$package" == "zcheck-core" ]]; then
+    cargo package "${package_args[@]}"
+  else
+    cargo package "${package_args[@]}" --no-verify \
+      --config "patch.crates-io.zcheck-core.path='$repo_root/crates/zcheck-core'"
+  fi
+  archive="$package_target/package/$package-$version.crate"
+  required_paths=(LICENSE README.md)
+  if [[ "$package" == "zcheck-core" ]]; then
+    required_paths+=(
+      contracts/schema-1/manifest.toml
+      contracts/schema-1/plan-linux.json
+      contracts/schema-1/receipt.json
+    )
+  fi
+  for required_path in "${required_paths[@]}"; do
+    if ! tar -tzf "$archive" | grep -Fx "$package-$version/$required_path" >/dev/null; then
+      echo "$package archive is missing $required_path" >&2
+      exit 1
+    fi
+  done
+  if tar -tzf "$archive" | grep -F "$package-$version/tests/" >/dev/null; then
+    echo "$package archive contains workspace-only integration tests" >&2
+    exit 1
+  fi
+  tar -xzf "$archive" -C "$package_tmp"
+  for required_path in "${required_paths[@]}"; do
+    source_path="$repo_root/$required_path"
+    if [[ "$package" == "zcheck-core" && "$required_path" == contracts/* ]]; then
+      source_path="$repo_root/crates/zcheck-core/$required_path"
+    fi
+    cmp "$source_path" "$package_tmp/$package-$version/$required_path"
+  done
+done
+
+core="$package_tmp/zcheck-core-$version"
+cli="$package_tmp/zcheck-$version"
+archive_target="$package_tmp/target"
+core_patch="patch.crates-io.zcheck-core.path = '$core'"
+
+cargo test --manifest-path "$core/Cargo.toml" --locked --offline --target-dir "$archive_target"
+cargo test --manifest-path "$cli/Cargo.toml" --locked --offline \
+  --target-dir "$archive_target" --config "$core_patch"

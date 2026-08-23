@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""Bootstrap repository checks that run before Rust or zrail builds."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import re
+import sys
+import tomllib
+
+ROOT = Path(__file__).resolve().parent.parent
+CRATES = ROOT / "crates"
+FACADE_NAMES = {"lib.rs", "main.rs", "mod.rs"}
+MODULE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;")
+PATH_ATTR = re.compile(r'^\s*#\[path\s*=\s*"([^"]+)"\]')
+INLINE_TEST = re.compile(
+    r"#\[cfg\s*\(\s*test\s*\)\s*\]\s*(?:#\[[^]]+\]\s*)*mod\s+\w+\s*\{",
+    re.DOTALL,
+)
+INLINE_MODULE = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{",
+    re.MULTILINE,
+)
+IMPLEMENTATION_ITEM = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?"
+    r"(?:const|enum|impl|macro_rules!|static|struct|trait|type)\b",
+    re.MULTILINE,
+)
+FUNCTION_ITEM = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)",
+    re.MULTILINE,
+)
+
+
+def relative(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def rust_files() -> list[Path]:
+    return sorted(path for path in CRATES.rglob("*.rs") if "target" not in path.parts)
+
+
+def check_required_files(errors: list[str]) -> None:
+    required = [
+        ".editorconfig",
+        ".gitattributes",
+        ".github/actions/setup-zcheck/action.yml",
+        ".github/actions/setup-zcheck/install.py",
+        ".github/actions/setup-zcheck/test_install.py",
+        ".github/actions/setup-zrail/action.yml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/authority.yml",
+        ".github/workflows/security.yml",
+        ".gitignore",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "Cargo.toml",
+        "LICENSE",
+        "README.md",
+        "clippy.toml",
+        "docs/design.md",
+        "docs/roadmap.md",
+        "docs/schema-1.md",
+        "crates/zcheck-core/contracts/schema-1/manifest.toml",
+        "crates/zcheck-core/contracts/schema-1/plan-linux.json",
+        "crates/zcheck-core/contracts/schema-1/receipt.json",
+        "rust-toolchain.toml",
+        "rustfmt.toml",
+        "scripts/package-check",
+        "scripts/structure-check",
+        "zcheck.toml",
+        "zrail.lock",
+        "zrail.toml",
+    ]
+    for name in required:
+        if not (ROOT / name).is_file():
+            errors.append(f"missing required file {name}")
+    if (ROOT / "scripts/check").exists():
+        errors.append("scripts/check is forbidden; zcheck.toml is canonical")
+    for name in [".cargo/config", ".cargo/config.toml"]:
+        path = ROOT / name
+        if path.exists() or path.is_symlink():
+            errors.append(f"repository-local Cargo configuration is forbidden: {name}")
+
+
+def check_ci_contract(errors: list[str]) -> None:
+    source = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    guard = "- name: Reject repository-local Cargo configuration"
+    if source.count(guard) != 3:
+        errors.append("every CI job that invokes Cargo must reject repository-local configuration")
+    if source.count("--format github") != 2:
+        errors.append("every zcheck CI lane must select the GitHub reporter")
+    if source.count("if: always()") != 2:
+        errors.append("every zcheck CI lane must retain evidence after failure")
+    if source.count("if-no-files-found: error") != 2:
+        errors.append("missing zcheck evidence must fail artifact retention")
+    upload = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+    if source.count(upload) != 2:
+        errors.append("zcheck evidence uploads must use the reviewed immutable action revision")
+    compatibility = "cargo test --locked --offline -p zcheck-core"
+    if source.count(compatibility) != 1:
+        errors.append("minimum-Rust CI must execute the schema compatibility contracts")
+
+
+def check_setup_action(errors: list[str]) -> None:
+    source = (ROOT / ".github/actions/setup-zcheck/action.yml").read_text(encoding="utf-8")
+    unique = [
+        "using: composite",
+        "if: runner.os != 'Windows'",
+        "if: runner.os == 'Windows'",
+        'run: python3 "${{ github.action_path }}/install.py"',
+        'run: python "${{ github.action_path }}/install.py"',
+    ]
+    for contract in unique:
+        if source.count(contract) != 1:
+            errors.append(f"setup-zcheck action must contain exactly one {contract!r}")
+    repeated = [
+        "ZCHECK_SETUP_VERSION: ${{ inputs.version }}",
+        "ZCHECK_SETUP_SHA256: ${{ inputs.sha256 }}",
+    ]
+    for contract in repeated:
+        if source.count(contract) != 2:
+            errors.append(f"setup-zcheck action must contain exactly two {contract!r}")
+    if source.count("required: true") != 2 or "default:" in source:
+        errors.append("setup-zcheck must require an exact version and SHA-256 without defaults")
+
+
+def check_workspace(errors: list[str]) -> None:
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    workspace = manifest.get("workspace", {})
+    package = workspace.get("package", {})
+    if workspace.get("resolver") != "3":
+        errors.append("workspace resolver must be 3")
+    if package.get("edition") != "2024":
+        errors.append("workspace edition must be 2024")
+    expected = {
+        "crates/zcheck-core",
+        "crates/zcheck-cli",
+        "crates/zcheck-testkit",
+    }
+    if set(workspace.get("members", [])) != expected:
+        errors.append("unexpected workspace members")
+
+    packages: dict[str, dict] = {}
+    for path in sorted(CRATES.glob("*/Cargo.toml")):
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        packages[data["package"]["name"]] = data
+    if set(packages) != {"zcheck", "zcheck-core", "zcheck-testkit"}:
+        errors.append("unexpected crate package names")
+    if "zcheck-core" not in packages.get("zcheck", {}).get("dependencies", {}):
+        errors.append("zcheck must depend on zcheck-core")
+    core_dependencies = packages.get("zcheck-core", {}).get("dependencies", {})
+    if "zcheck" in core_dependencies or "zcheck-testkit" in core_dependencies:
+        errors.append("zcheck-core must remain independent of the CLI and testkit")
+    if packages.get("zcheck-testkit", {}).get("package", {}).get("publish") is not False:
+        errors.append("zcheck-testkit must remain unpublished")
+
+
+def sibling_owner(test: Path) -> Path | None:
+    owner_name = test.stem.removesuffix("_test") + ".rs"
+    candidates = [test.with_name(owner_name)]
+    candidates.extend(test.with_name(name) for name in FACADE_NAMES)
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
+
+
+def check_test_file(path: Path, errors: list[str]) -> None:
+    if not path.name.endswith("_test.rs") or "src" not in path.parts:
+        return
+    owner = sibling_owner(path)
+    if owner is None:
+        errors.append(f"{relative(path)}: has no sibling source owner")
+        return
+    module = path.stem
+    declaration = re.compile(
+        rf'#\[cfg\(test\)\]\s*#\[path\s*=\s*"{re.escape(path.name)}"\]\s*mod\s+{module}\s*;',
+        re.DOTALL,
+    )
+    if declaration.search(owner.read_text(encoding="utf-8")) is None:
+        errors.append(
+            f"{relative(path)}: owner {relative(owner)} must declare it with cfg(test) and path"
+        )
+
+
+def module_target(path: Path, module: str, explicit: str | None) -> Path:
+    if explicit is not None:
+        return path.parent / explicit
+    if path.name in FACADE_NAMES:
+        direct = path.parent / f"{module}.rs"
+        nested = path.parent / module / "mod.rs"
+    else:
+        direct = path.parent / path.stem / f"{module}.rs"
+        nested = path.parent / path.stem / module / "mod.rs"
+    return direct if direct.is_file() else nested
+
+
+def check_module_graph(path: Path, source: str, errors: list[str]) -> None:
+    lines = source.splitlines()
+    for index, line in enumerate(lines):
+        match = MODULE.match(line)
+        if match is None:
+            continue
+        explicit = None
+        for previous in reversed(lines[max(0, index - 4) : index]):
+            path_match = PATH_ATTR.match(previous)
+            if path_match is not None:
+                explicit = path_match.group(1)
+                break
+            if previous.strip() and not previous.lstrip().startswith("#"):
+                break
+        target = module_target(path, match.group(1), explicit)
+        if not target.is_file():
+            errors.append(f"{relative(path)}:{index + 1}: module has no source file")
+
+
+def check_facade(path: Path, source: str, errors: list[str]) -> None:
+    if path.name not in FACADE_NAMES:
+        return
+    inline_module = INLINE_MODULE.search(source)
+    if inline_module is not None:
+        line = source.count("\n", 0, inline_module.start()) + 1
+        errors.append(f"{relative(path)}:{line}: facade contains inline module implementation")
+    item = IMPLEMENTATION_ITEM.search(source)
+    if item is not None:
+        line = source.count("\n", 0, item.start()) + 1
+        errors.append(f"{relative(path)}:{line}: facade contains implementation")
+    for function in FUNCTION_ITEM.finditer(source):
+        if path.name != "main.rs" or function.group(1) != "main":
+            line = source.count("\n", 0, function.start()) + 1
+            errors.append(f"{relative(path)}:{line}: facade contains function implementation")
+
+
+def check_rust(errors: list[str]) -> None:
+    for path in rust_files():
+        source = path.read_text(encoding="utf-8")
+        name = relative(path)
+        lines = len(source.splitlines())
+        if lines > 300:
+            errors.append(f"{name}: {lines} lines exceeds 300")
+        if not source.startswith("//!"):
+            errors.append(f"{name}: missing //! module contract")
+        is_test = path.name.endswith("_test.rs") or "/tests/" in f"/{name}"
+        if not is_test and (INLINE_TEST.search(source) is not None or "#[test]" in source):
+            errors.append(f"{name}: tests must be in sibling or integration-test files")
+        check_facade(path, source, errors)
+        check_test_file(path, errors)
+        check_module_graph(path, source, errors)
+
+
+def main() -> int:
+    errors: list[str] = []
+    check_required_files(errors)
+    check_ci_contract(errors)
+    check_setup_action(errors)
+    check_workspace(errors)
+    check_rust(errors)
+    if errors:
+        print("structure violations:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+    print(f"structure: {len(rust_files())} Rust files, facades and tests valid, max 300 lines")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
