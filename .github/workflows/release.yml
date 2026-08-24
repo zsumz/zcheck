@@ -1,0 +1,290 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+defaults:
+  run:
+    shell: bash
+
+# Repository rules must protect v* tags. The release environment must require
+# review and permit deployments only from those protected tags.
+jobs:
+  qualify:
+    name: qualify protected tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a version tag reachable from the protected branch
+        id: version
+        run: |
+          tag="$GITHUB_REF_NAME"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch --no-tags origin "${{ github.event.repository.default_branch }}"
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD
+          version="${tag#v}"
+          manifest_version="$(python3 -c 'import pathlib,tomllib; print(tomllib.loads(pathlib.Path("Cargo.toml").read_text())["workspace"]["package"]["version"])')"
+          test "$version" = "$manifest_version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Reject repository-local Cargo configuration
+        run: |
+          for cargo_config in .cargo/config .cargo/config.toml; do
+            if [[ -e "$cargo_config" || -L "$cargo_config" ]]; then
+              echo "repository-local Cargo configuration is not permitted: $cargo_config" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up pinned Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Set up reviewed zrail
+        uses: ./.github/actions/setup-zrail
+
+      - name: Run complete qualification gate offline
+        env:
+          ZCHECK_EVIDENCE_DIR: ${{ runner.temp }}/zcheck-evidence
+        run: >-
+          cargo run --locked --offline -p zcheck -- run check
+          --format github
+          --logs-dir "$ZCHECK_EVIDENCE_DIR/logs"
+          --receipt "$ZCHECK_EVIDENCE_DIR/receipt.json"
+
+      - name: Upload tag qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qualification-evidence
+          path: ${{ runner.temp }}/zcheck-evidence
+          if-no-files-found: error
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: qualify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            archive: tar.gz
+            python: python3
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            archive: tar.gz
+            python: python3
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            archive: tar.gz
+            python: python3
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            archive: tar.gz
+            python: python3
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+            archive: tar.gz
+            python: python3
+          - target: aarch64-apple-darwin
+            runner: macos-15
+            archive: tar.gz
+            python: python3
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+            archive: zip
+            python: python
+    env:
+      ZCHECK_TARGET: ${{ matrix.target }}
+      ZCHECK_VERSION: ${{ needs.qualify.outputs.version }}
+    steps:
+      - name: Check out qualified source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Reject repository-local Cargo configuration
+        run: |
+          for cargo_config in .cargo/config .cargo/config.toml; do
+            if [[ -e "$cargo_config" || -L "$cargo_config" ]]; then
+              echo "repository-local Cargo configuration is not permitted: $cargo_config" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up pinned Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Add release target
+        run: rustup target add "$ZCHECK_TARGET"
+
+      - name: Install musl linker
+        if: runner.os == 'Linux' && contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends musl-tools
+          target_key="$(printf '%s' "$ZCHECK_TARGET" | tr '[:lower:]-' '[:upper:]_')"
+          echo "CARGO_TARGET_${target_key}_LINKER=musl-gcc" >> "$GITHUB_ENV"
+
+      - name: Fetch locked dependencies
+        run: cargo fetch --locked
+
+      - name: Build locked release binary offline
+        run: >-
+          cargo build --release --locked --offline
+          -p zcheck --bin zcheck --target "$ZCHECK_TARGET"
+
+      - name: Verify produced binary and manifest parsing
+        run: |
+          binary="target/$ZCHECK_TARGET/release/zcheck"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then binary="$binary.exe"; fi
+          test "$("$binary" --version)" = "zcheck $ZCHECK_VERSION"
+          "$binary" --root "$GITHUB_WORKSPACE" validate
+
+      - name: Package deterministic archive
+        run: |
+          binary="target/$ZCHECK_TARGET/release/zcheck"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then binary="$binary.exe"; fi
+          archive="dist/zcheck-$ZCHECK_VERSION-$ZCHECK_TARGET.${{ matrix.archive }}"
+          "${{ matrix.python }}" scripts/package-release.py \
+            --binary "$binary" --license LICENSE --readme README.md --output "$archive"
+
+      - name: Upload immutable build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/zcheck-${{ env.ZCHECK_VERSION }}-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+          compression-level: 0
+
+  linux-runtime:
+    name: clean runtime ${{ matrix.target }}
+    needs: [qualify, build]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            image: ubuntu:24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            image: ubuntu:24.04
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+            image: alpine:3.22
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            image: alpine:3.22
+    steps:
+      - name: Download Linux archive
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-${{ matrix.target }}
+          path: archive
+
+      - name: Run a qualification graph without a Rust toolchain
+        env:
+          ZCHECK_VERSION: ${{ needs.qualify.outputs.version }}
+        run: |
+          mkdir -p runtime smoke
+          tar -xzf "archive/zcheck-$ZCHECK_VERSION-${{ matrix.target }}.tar.gz" -C runtime
+          printf 'schema = 1\ndefault = "check"\n[execution]\nrepository_state = "ignore"\n[tasks.check]\ndescription = "Smoke the released binary."\nrun = ["true"]\ntools = ["true"]\n' > smoke/zcheck.toml
+          docker run --rm \
+            --volume "$PWD/runtime:/release:ro" \
+            --volume "$PWD/smoke:/work:ro" \
+            "${{ matrix.image }}" sh -c \
+            '/release/zcheck --version && /release/zcheck --root /work run check --logs-dir /tmp/zcheck-logs --receipt /tmp/zcheck-receipt.json'
+
+  publish:
+    name: attest and publish
+    needs: [qualify, build, linux-runtime]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ZCHECK_VERSION: ${{ needs.qualify.outputs.version }}
+    steps:
+      - name: Check out reviewed release metadata
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download every qualified archive
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Require the exact release set and generate checksums
+        run: |
+          expected=(
+            "zcheck-$ZCHECK_VERSION-x86_64-unknown-linux-gnu.tar.gz"
+            "zcheck-$ZCHECK_VERSION-aarch64-unknown-linux-gnu.tar.gz"
+            "zcheck-$ZCHECK_VERSION-x86_64-unknown-linux-musl.tar.gz"
+            "zcheck-$ZCHECK_VERSION-aarch64-unknown-linux-musl.tar.gz"
+            "zcheck-$ZCHECK_VERSION-x86_64-apple-darwin.tar.gz"
+            "zcheck-$ZCHECK_VERSION-aarch64-apple-darwin.tar.gz"
+            "zcheck-$ZCHECK_VERSION-x86_64-pc-windows-msvc.zip"
+          )
+          test "$(find dist -maxdepth 1 -type f -name 'zcheck-*' | wc -l | tr -d ' ')" = 7
+          for archive in "${expected[@]}"; do test -f "dist/$archive"; done
+          (cd dist && sha256sum "${expected[@]}" > SHA256SUMS)
+          (cd dist && sha256sum --check SHA256SUMS)
+
+      - name: Extract reviewed release notes
+        run: >-
+          python3 scripts/release-notes.py
+          "$ZCHECK_VERSION" CHANGELOG.md "$RUNNER_TEMP/release-notes.md"
+
+      - name: Attest archive provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            dist/zcheck-*.tar.gz
+            dist/zcheck-*.zip
+
+      - name: Create draft, upload complete release, then publish
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag --draft --title "zcheck $ZCHECK_VERSION" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+          gh release upload "$GITHUB_REF_NAME" dist/zcheck-* dist/SHA256SUMS
+          gh release edit "$GITHUB_REF_NAME" --draft=false
