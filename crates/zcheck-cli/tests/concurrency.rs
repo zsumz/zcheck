@@ -35,7 +35,7 @@ fn executable(id: &str, role: &str, delay: u64, events: &Path) -> String {
     let test_name = fixture::TEST_NAME;
     let events = quoted(events);
     format!(
-        "run = [{helper}, \"--exact\", {test_name:?}, \"--nocapture\"]\nenv = {{ {ROLE} = {role:?}, {TASK} = {id:?}, {DELAY} = \"{delay}\", {EVENTS} = {events} }}\n"
+        "run = [{helper}, \"--exact\", {test_name:?}, \"--nocapture\"]\nenv = {{ {ROLE} = {role:?}, {TASK} = {id:?}, {DELAY} = \"{delay}\", {EVENTS} = {events}, RUST_BACKTRACE = \"0\" }}\n"
     )
 }
 
