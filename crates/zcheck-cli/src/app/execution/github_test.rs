@@ -38,11 +38,7 @@ fn grouped_task_data_cannot_start_a_workflow_command() {
 
 #[test]
 fn failure_context_reads_only_a_bounded_complete_line_tail() {
-    let directory = std::env::temp_dir().join(format!(
-        "zcheck-github-tail-{}-{}",
-        std::process::id(),
-        std::thread::current().name().unwrap_or("test")
-    ));
+    let directory = std::env::temp_dir().join(format!("zcheck-github-tail-{}", std::process::id()));
     assert!(fs::create_dir_all(&directory).is_ok());
     let path = directory.join("task.log");
     let source = format!("partial{}\nlast-one\nlast-two\n", "x".repeat(20 * 1024));
