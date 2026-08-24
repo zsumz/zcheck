@@ -27,7 +27,7 @@ fn quoted(path: impl AsRef<Path>) -> String {
 
 fn failing_command() -> String {
     format!(
-        "run = [{}, \"--exact\", {:?}, \"--nocapture\"]\nenv = {{ {ROLE} = \"fail\" }}\n",
+        "run = [{}, \"--exact\", {:?}, \"--nocapture\"]\nenv = {{ {ROLE} = \"fail\", RUST_BACKTRACE = \"0\" }}\n",
         quoted(fixture_binary()),
         fixture::TEST_NAME
     )
