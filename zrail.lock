@@ -2,7 +2,7 @@
 schema = 1
 semantics = 2
 producer = "0.0.2"
-contract_sha256 = "489e5dbcc3c24a336142a478f8f25dae05c0cfc238bafbde09dffc10f9f9a2cf"
+contract_sha256 = "e866b7dbaabaa5ecf5d97e367a92867bfd19adf6ecf996d2034459f45845c102"
 ratchet = []
 
 [[package]]
@@ -206,7 +206,7 @@ sha256 = "6bf4373888eac85502f326c20018cb260ed5804fefdfa40e0e4474a5c0d53c21"
 [[gate]]
 name = "check"
 path = "zcheck.toml"
-sha256 = "a1df29df08631d091c8611b12036618c0f980ade5fe6134196e7c31787ce9608"
+sha256 = "dfc8bb437b5a5ce56eee65773366bd2b0181d2a2532242d556954f2a8852bc98"
 
 [[gate.input]]
 path = ".github/actions/setup-zcheck/action.yml"
@@ -274,7 +274,7 @@ sha256 = "74da629d77c1793cb179b7ba26d75eb2376d19c4a63fef5734d20a78a6102827"
 
 [[gate.input]]
 path = "scripts/structure-check"
-sha256 = "7c7876fef33a9082a27cf5dd06461d56fe06545ff1521af928b56dd64a38b927"
+sha256 = "86ac22c9fe0aa93527c45cdc2e06c56e74c2c991c05f549512735c313c0a317d"
 
 [[gate]]
 name = "ci"
@@ -288,6 +288,43 @@ sha256 = "e260d0845a1d394b10c7b1dea7c54de8683a4d5010c2ce07a8423b58c52671de"
 [[gate.input]]
 path = ".github/actions/setup-zrail/action.yml"
 sha256 = "6bf4373888eac85502f326c20018cb260ed5804fefdfa40e0e4474a5c0d53c21"
+
+[[gate]]
+name = "release"
+path = ".github/workflows/release.yml"
+sha256 = "01012ca33c9a3a9c33cd1bd3c834b06e43821e1a67b85f88f7333e2384f5d297"
+
+[[gate.input]]
+path = ".github/actions/setup-rust/action.yml"
+sha256 = "e260d0845a1d394b10c7b1dea7c54de8683a4d5010c2ce07a8423b58c52671de"
+
+[[gate.input]]
+path = ".github/actions/setup-zrail/action.yml"
+sha256 = "6bf4373888eac85502f326c20018cb260ed5804fefdfa40e0e4474a5c0d53c21"
+
+[[gate.input]]
+path = "CHANGELOG.md"
+sha256 = "3c57de8c41d44d392c032ccb97f98dbf5c62db63efda8991850593c627e2914c"
+
+[[gate.input]]
+path = "Cargo.toml"
+sha256 = "abde77d310958ac27fd7ab8877497ddc397a24732fff564e28a4fb27f6a7e012"
+
+[[gate.input]]
+path = "LICENSE"
+sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+
+[[gate.input]]
+path = "README.md"
+sha256 = "99ef22b6db70c2ff8a1161d8409266daaace1215ed36e98ccd2ce35480038649"
+
+[[gate.input]]
+path = "scripts/package-release.py"
+sha256 = "a7bf455e6b1d84b6e07e152b0bb0791161799beb961fd62be7aa76e4dae10661"
+
+[[gate.input]]
+path = "scripts/release-notes.py"
+sha256 = "d137393d9f64f696b359e603ef266f859fdba180ff59ab075960ccbe4a93ecb4"
 
 [[gate]]
 name = "security"

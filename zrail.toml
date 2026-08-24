@@ -40,6 +40,14 @@ inputs = [".github/actions/setup-rust/action.yml", ".github/actions/setup-zrail/
 requires = ["check"]
 reason = "Protected-base analysis reviews proposed source as data without executing it."
 
+[[gate]]
+name = "release"
+kind = "release"
+path = ".github/workflows/release.yml"
+inputs = [".github/actions/setup-rust/action.yml", ".github/actions/setup-zrail/action.yml", "scripts/package-release.py", "scripts/release-notes.py", "CHANGELOG.md", "Cargo.toml", "LICENSE", "README.md"]
+requires = ["ci", "security"]
+reason = "Protected version tags qualify, package, runtime-test, attest, and atomically publish the complete native release set."
+
 [[invariant]]
 id = "SCHEMA-01"
 title = "Schema one and process exits remain machine-compatible"
@@ -186,6 +194,21 @@ evidence = [
   "rust-test:crates/zcheck-cli/tests/github_reporter.rs::github_annotations_have_a_stable_run_wide_limit",
   "gate:check",
   "gate:ci",
+]
+
+[[invariant]]
+id = "REL-01"
+title = "Native releases are complete, deterministic, and provenance-attested"
+status = "enforced"
+document = "docs/publishing.md#binary-releases"
+evidence = [
+  "rust-test:crates/zcheck-testkit/tests/release_packaging.rs::release_archives_are_deterministic_with_exact_members",
+  "rust-test:crates/zcheck-testkit/tests/release_packaging.rs::release_notes_are_extracted_from_one_exact_version_section",
+  "rust-test:crates/zcheck-testkit/tests/release_workflow.rs::release_requires_protected_tagged_source_before_repository_execution",
+  "rust-test:crates/zcheck-testkit/tests/release_workflow.rs::release_covers_the_exact_native_target_and_archive_set",
+  "rust-test:crates/zcheck-testkit/tests/release_workflow.rs::publishing_waits_for_all_builds_and_clean_linux_runtime_checks",
+  "rust-test:crates/zcheck-testkit/tests/release_workflow.rs::every_external_release_action_uses_an_immutable_full_sha",
+  "gate:release",
 ]
 
 [dependencies]
@@ -449,8 +472,10 @@ allow = [
   "crates/zcheck-cli/tests/repository_evidence.rs",
   "crates/zcheck-testkit/src/repository.rs",
   "crates/zcheck-testkit/tests/fixtures.rs",
+  "crates/zcheck-testkit/tests/release_packaging.rs",
+  "crates/zcheck-testkit/tests/release_workflow.rs",
 ]
-reason = "Repository discovery, evidence capture, artifact persistence, Linux process-tree liveness, and isolated fixtures own filesystem access."
+reason = "Repository discovery, evidence capture, artifact persistence, Linux process-tree liveness, and isolated or release-contract fixtures own filesystem access."
 
 [[owner]]
 name = "process-capability"
@@ -465,8 +490,9 @@ allow = [
   "crates/zcheck-cli/tests/cli.rs",
   "crates/zcheck-cli/tests/process_control/fixture.rs",
   "crates/zcheck-testkit/src/repository.rs",
+  "crates/zcheck-testkit/tests/release_packaging.rs",
 ]
-reason = "Task execution and Git evidence capture own child processes; tests own isolated proof processes."
+reason = "Task execution and Git evidence capture own child processes; tests own isolated proof and release-helper processes."
 
 [[owner]]
 name = "process-construction"
@@ -481,5 +507,6 @@ allow = [
   "crates/zcheck-cli/tests/cli.rs",
   "crates/zcheck-cli/tests/process_control/fixture.rs",
   "crates/zcheck-testkit/src/repository.rs",
+  "crates/zcheck-testkit/tests/release_packaging.rs",
 ]
-reason = "Process construction is confined to task execution, Git evidence capture, and isolated test boundaries."
+reason = "Process construction is confined to task execution, Git evidence capture, and isolated or release-contract test boundaries."
