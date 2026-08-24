@@ -22,8 +22,41 @@
 
 ## Install
 
+### Download a verified binary
+
+Set `ZCHECK_VERSION` to an exact release with binary assets and select the
+target for your machine:
+
 ```sh
-cargo install zcheck --version 0.0.1 --locked
+: "${ZCHECK_VERSION:?set an exact zcheck version}"
+ZCHECK_TARGET=x86_64-unknown-linux-gnu
+ZCHECK_ARCHIVE="zcheck-${ZCHECK_VERSION}-${ZCHECK_TARGET}.tar.gz"
+ZCHECK_RELEASE="https://github.com/zsumz/zcheck/releases/download/v${ZCHECK_VERSION}"
+curl -fLO "${ZCHECK_RELEASE}/${ZCHECK_ARCHIVE}"
+curl -fLO "${ZCHECK_RELEASE}/SHA256SUMS"
+grep "  ${ZCHECK_ARCHIVE}$" SHA256SUMS | sha256sum --check
+tar -xzf "${ZCHECK_ARCHIVE}"
+./zcheck --version
+```
+
+Use `LC_ALL=C shasum -a 256 --check` in place of `sha256sum --check` on macOS.
+On Windows, compare `Get-FileHash -Algorithm SHA256 <archive>` with the
+archive's `SHA256SUMS` entry before expanding the zip. GitHub-hosted provenance
+can be verified with:
+
+```sh
+gh attestation verify "${ZCHECK_ARCHIVE}" --repo zsumz/zcheck
+```
+
+Release archives cover x86-64 and ARM64 Linux with GNU or musl, x86-64 and
+ARM64 macOS, and x86-64 Windows.
+
+### Cargo fallback
+
+If no prebuilt target fits, install the exact registry version:
+
+```sh
+cargo install zcheck --version "$ZCHECK_VERSION" --locked
 ```
 
 Building from source requires Rust 1.96 or newer. The canonical toolchain is

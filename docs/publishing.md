@@ -15,6 +15,33 @@ or changing package versions.
 - Schema 1 is the stable `0.0.1` contract. Incompatible changes require a new
   schema number and updated golden contracts.
 
+## Binary releases
+
+Signed stable version tags publish native archives through
+`.github/workflows/release.yml`. Repository rules protect `v*` tags, and the
+`release` environment requires human review and accepts deployments only from
+those protected tags.
+
+The workflow rejects tags that do not exactly match the workspace version or
+are not reachable from the default branch. It then runs the complete offline
+qualification graph before building this exact release set:
+
+- x86-64 and ARM64 Linux with GNU libc;
+- x86-64 and ARM64 Linux with musl;
+- x86-64 and ARM64 macOS;
+- x86-64 Windows with MSVC.
+
+Every archive contains only the `zcheck` executable, `LICENSE`, and `README.md`
+with deterministic archive metadata. GNU and musl binaries run a qualification
+graph in clean Ubuntu and Alpine containers without a Rust toolchain. The
+publish job requires all seven archives, verifies `SHA256SUMS`, creates GitHub
+provenance attestations, and publishes the complete release from a draft only
+after every preceding job passes.
+
+Release notes come from the exact version section in `CHANGELOG.md`. A tag must
+not be pushed until that reviewed section exists and the crates.io artifacts for
+the same version have passed the registry-only installation check below.
+
 ## Required evidence
 
 Before requesting publication authority, record all of the following for the
