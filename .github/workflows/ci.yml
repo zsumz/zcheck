@@ -50,18 +50,12 @@ jobs:
       - name: Set up reviewed zrail
         uses: ./.github/actions/setup-zrail
 
-      - name: Set up released zcheck
-        uses: zactionsz/setup-zcheck@88ca70422145efd6ab7f4262fb096ecd16372f57
-        with:
-          version: "0.0.2"
-          sha256: a9e3ca964b6f5e86c693edeff4aeaddb46ee9d62f8713d3ded0bb6533b758e53
-
       - name: Run canonical zcheck qualification
         env:
           ZCHECK_CACHE_DIR: ${{ runner.temp }}/zcheck
           ZCHECK_EVIDENCE_DIR: ${{ runner.temp }}/zcheck-evidence
         run: >-
-          zcheck run check
+          cargo run --locked --offline -p zcheck -- run check
           --format github
           --logs-dir "$ZCHECK_EVIDENCE_DIR/logs"
           --receipt "$ZCHECK_EVIDENCE_DIR/receipt.json"
