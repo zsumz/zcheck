@@ -132,9 +132,10 @@ Linux x86-64 and ARM64, macOS x86-64 and Apple Silicon, and Windows x86-64. The
 installer caps archive and expanded binary size, extracts exactly one regular
 binary, selects `python3` on Unix and `python` on Windows, verifies
 `zcheck --version`, and adds only its directory to `PATH`.
-There is no latest-version resolution, source fallback, cache, task execution,
-or publication in this repository. Version `0.0.1` is crates-first; binary
-archives and action publication are outside that release boundary.
+There is no latest-version resolution, source fallback, cache, or task
+execution. Version `0.0.1` is crates-only; protected stable tags publish binary
+archives beginning with `0.0.2`. Setup-action publication remains outside the
+release boundary.
 
 ## Repository state
 

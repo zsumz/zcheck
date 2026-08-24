@@ -6,10 +6,11 @@ or changing package versions.
 
 ## Release scope
 
-`0.0.1` is crates-first:
+`0.0.1` is the crates-only initial release. Native binary archives begin with
+`0.0.2`:
 
 - Publish `zcheck-core`, then `zcheck`, to crates.io.
-- Binary archives and the setup action are outside this release.
+- Publish binary archives only after both crates pass registry verification.
 - `.github/actions/setup-zcheck` is a tested contract for exact archives with
   caller-reviewed digests; it is not a published action.
 - Schema 1 is the stable `0.0.1` contract. Incompatible changes require a new
@@ -59,20 +60,15 @@ Do not replace hosted matrix evidence with a single-machine build.
 
 ## Fresh registry checks
 
-An exact crates.io lookup on 2026-08-23 found no published package named
-`zcheck`. That historical result does not reserve the name and does not replace
-fresh checks for both `zcheck` and `zcheck-core`.
-
-Immediately before first publication, query the exact crates.io endpoints for
-both package names:
+Immediately before publication, query the exact crates.io endpoints for both
+package names and confirm that the candidate version does not already exist:
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' https://crates.io/api/v1/crates/zcheck-core
 curl -sS -o /dev/null -w '%{http_code}\n' https://crates.io/api/v1/crates/zcheck
 ```
 
-Both responses must be reviewed. For an unclaimed name the API returns `404`;
-any other result stops the first-publication procedure for investigation.
+Both responses must be reviewed before packaging or uploading either crate.
 
 ## Publish in dependency order
 
@@ -83,8 +79,8 @@ cargo publish --dry-run --locked --registry crates-io -p zcheck-core
 cargo publish --locked --registry crates-io -p zcheck-core
 ```
 
-Wait until crates.io exposes `zcheck-core 0.0.1`. Then rehearse the CLI
-against the registry dependency and publish it:
+Wait until crates.io exposes the exact candidate `zcheck-core` version. Then
+rehearse the CLI against the registry dependency and publish it:
 
 ```sh
 cargo publish --dry-run --locked --registry crates-io -p zcheck
@@ -98,12 +94,13 @@ Each real `cargo publish` command requires fresh explicit publication authority.
 Use a fresh Cargo home and install the exact registry version:
 
 ```sh
+ZCHECK_VERSION=0.0.2
 ZCHECK_VERIFY_HOME="$(mktemp -d)"
 CARGO_HOME="$ZCHECK_VERIFY_HOME/cargo" \
-  cargo install zcheck --version 0.0.1 --locked --registry crates-io
+  cargo install zcheck --version "$ZCHECK_VERSION" --locked --registry crates-io
 "$ZCHECK_VERIFY_HOME/cargo/bin/zcheck" --version
 ```
 
-The final command must report `zcheck 0.0.1`. Preserve the hosted job links,
-crate-version pages, package checksums, and installation transcript as release
-evidence before any tag or announcement.
+The final command must report the exact candidate version. Preserve the hosted
+job links, crate-version pages, package checksums, and installation transcript
+as release evidence before any tag or announcement.
