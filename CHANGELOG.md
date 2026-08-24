@@ -4,6 +4,8 @@ All notable changes to zcheck are documented in this file.
 
 ## Unreleased
 
+## 0.0.2 - 2026-08-24
+
 - Adds protected native binary releases with deterministic archives, clean
   GNU and musl runtime checks, SHA-256 manifests, and GitHub attestations.
 

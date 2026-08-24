@@ -115,7 +115,7 @@ default_features = true
 [package.dependency.source]
 kind = "workspace-member"
 directory = "crates/zcheck-core"
-requirement = "=0.0.1"
+requirement = "=0.0.2"
 
 [[package.dependency]]
 alias = "zcheck-testkit"
@@ -188,7 +188,7 @@ default_features = true
 [package.dependency.source]
 kind = "workspace-member"
 directory = "crates/zcheck-core"
-requirement = "=0.0.1"
+requirement = "=0.0.2"
 
 [[gate]]
 name = "architecture-review"
@@ -226,7 +226,7 @@ sha256 = "2d19ff967d9f1b4cd54bd289a897c7a9a3308df6a26f27e9925d69a022dd6797"
 
 [[gate.input]]
 path = "Cargo.toml"
-sha256 = "abde77d310958ac27fd7ab8877497ddc397a24732fff564e28a4fb27f6a7e012"
+sha256 = "8874a66c0a6ddadce45384d5035b33611b685afc1fedabded0ebbf5d1cba4434"
 
 [[gate.input]]
 path = "clippy.toml"
@@ -304,11 +304,11 @@ sha256 = "6bf4373888eac85502f326c20018cb260ed5804fefdfa40e0e4474a5c0d53c21"
 
 [[gate.input]]
 path = "CHANGELOG.md"
-sha256 = "3c57de8c41d44d392c032ccb97f98dbf5c62db63efda8991850593c627e2914c"
+sha256 = "9ccccc276f283917f10f3313e7b423d105fae866e40e47af358b585e6527d142"
 
 [[gate.input]]
 path = "Cargo.toml"
-sha256 = "abde77d310958ac27fd7ab8877497ddc397a24732fff564e28a4fb27f6a7e012"
+sha256 = "8874a66c0a6ddadce45384d5035b33611b685afc1fedabded0ebbf5d1cba4434"
 
 [[gate.input]]
 path = "LICENSE"
