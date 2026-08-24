@@ -96,7 +96,7 @@ fn preserve_accepts_an_exactly_unchanged_dirty_checkout() {
         receipt
             .as_ref()
             .and_then(|value| value["runner"]["version"].as_str()),
-        Some("0.0.1")
+        Some(env!("CARGO_PKG_VERSION"))
     );
 }
 
