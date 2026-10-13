@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload tag qualification evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: qualification-evidence
           path: ${{ runner.temp }}/zcheck-evidence
@@ -177,7 +177,7 @@ jobs:
             --binary "$binary" --license LICENSE --readme README.md --output "$archive"
 
       - name: Upload immutable build artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-${{ matrix.target }}
           path: dist/zcheck-${{ env.ZCHECK_VERSION }}-${{ matrix.target }}.${{ matrix.archive }}
